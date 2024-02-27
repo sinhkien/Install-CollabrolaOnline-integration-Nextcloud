@@ -1,0 +1,141 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.6
+Creation-Date: 2023-10-31T17:28:15+07:00
+
+====== Cài đặt Collabora cho nextcloud ======
+Created Tuesday 31 October 2023
+
+* Link huong dan cai dat:
+* - https://www.collaboraoffice.com/code/linux-packages/
+
+# Cài đặt Collabora cho nextcloud
+wget https://collaboraoffice.com/downloads/gpg/collaboraonline-release-keyring.gpg
+wget https://www.collaboraoffice.com/repos/CollaboraOnline/CODE-centos7/repodata/repomd.xml.key && sudo rpm --import repomd.xml.key
+# Them repo
+# vim [[/etc/yum.repos.d/collabora.repo]]
+[collabora]
+name=Collabora Repository
+baseurl=https://collaboraoffice.com/repos/CollaboraOnline/CODE-centos7/
+gpgcheck=1
+gpgkey=https://collaboraoffice.com/repos/CollaboraOnline/CODE-centos7/repodata/repomd.xml.key
+enabled=1
+
+Or
+
+# get repo and install collabora
+wget https://www.collaboraoffice.com/repos/CollaboraOnline/CODE-centos7/repodata/repomd.xml.key && rpm --import repomd.xml.key
+yum -y install yum-utils
+yum-config-manager --add-repo https://www.collaboraoffice.com/repos/CollaboraOnline/CODE-centos7
+
+
+
+# yum install coolwsd CODE-brand
+systemctl status coolwsd
+sudo coolconfig set ssl.enable false
+sudo coolconfig set ssl.termination true
+sudo coolconfig set storage.wopi.host drive.appcloud.io.vn
+sudo coolconfig set-admin-password
+# Cau hinh file nginx tren server cai collabora
+vim /etc/nginx/conf.d/collabora.conf
+
+server {
+	listen 443 ssl;
+	server_name office.thacoagri.vn;
+	error_log /var/log/nginx/collabora.error;
+
+	  ssl_certificate /etc/pki/nginx/nextcloud.crt;
+	  ssl_certificate_key /etc/pki/nginx/nextcloud.key;
+
+	# static files
+	location ^~ /browser {
+		proxy_pass http://127.0.0.1:9980;
+		proxy_set_header Host $http_host;
+	}
+
+	# WOPI discovery URL
+	location ^~ /hosting/discovery {
+		proxy_pass http://127.0.0.1:9980;
+		proxy_set_header Host $http_host;
+	}
+
+	# Capabilities
+	location ^~ /hosting/capabilities {
+		proxy_pass http://127.0.0.1:9980;
+		proxy_set_header Host $http_host;
+	}
+
+	# main websocket
+	location ~ ^/cool/(.*)/ws$ {
+		proxy_pass http://127.0.0.1:9980;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "Upgrade";
+		proxy_set_header Host $http_host;
+		proxy_read_timeout 36000s;
+	}
+
+	# download, presentation and image upload
+	location ~ ^/(c|l)ool {
+		proxy_pass http://127.0.0.1:9980;
+		proxy_set_header Host $http_host;
+	}
+
+	# Admin Console websocket
+	location ^~ /cool/adminws {
+		proxy_pass http://127.0.0.1:9980;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "Upgrade";
+		proxy_set_header Host $http_host;
+		proxy_read_timeout 36000s;
+	}
+}
+
+nginx -t
+ systemctl restart nginx
+systemctl start coolwsd
+# Truy cap vao admin collabora
+https://drive.appcloud.io.vn/browser/dist/admin/admin.html
+username:
+password:
+
+
+* Cấu hình trên reverproxy
+
+server {
+  listen 443 ssl;
+	ssl_certificate /etc/pki/nginx/nextcloud.crt;
+	ssl_certificate_key /etc/pki/nginx/nextcloud.key;
+
+  server_name office.thacoagri.vn;
+
+  location / {
+	proxy_pass                 https://10.10.10.3;
+	proxy_set_header           Host $host;
+	proxy_http_version         1.1;
+	proxy_set_header           Upgrade $http_upgrade;
+	proxy_set_header           Connection "upgrade";
+	client_max_body_size       0;
+  }
+}
+- Set pass admin console: https://testoffice.thacoagri.vn/browser/dist/admin/admin.html
+#loolconfig set-admin-password [new_password]
+ 
+- Chinh sua logo khi mo file
+Thay the Nextcloud Office => THACO AGRI OFFICE	
+#/usr/share/coolwsd/browser/dist/nextcloud/branding.js
+Thay the logo 
+#/usr/share/coolwsd/browser/dist/nextcloud/images
+toolbar-bg-logo.svg
+Logo khi mở file office
+# vim /usr/share/coolwsd/browser/dist/nextcloud/branding.css
+body #document-header .document-logo {
+  /*background-image: var(--co-image-logo) !important;*/
+  background-repeat: no-repeat !important;
+  background-size: contain !important;
+  background-position: center !important;
+  width: 62px !important;
+} 
+
+- Import font cho coolwsd
+# /opt/collaboraoffice/share/fonts/truetype
+copy font vao thu muc
+# systemctl restart coolwsd
